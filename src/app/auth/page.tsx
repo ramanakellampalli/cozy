@@ -1,16 +1,26 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, Loader2, CheckCircle, Building2, User, ArrowLeft } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  Loader2,
+  CheckCircle,
+  Building2,
+  User,
+  ArrowLeft,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { signInAccount } from "@/lib/auth";
+import { getUserDoc, getTenantRecord } from "@/lib/db";
 import type { UserRole } from "@/types";
 
 const brandFeatures = [
@@ -21,35 +31,68 @@ const brandFeatures = [
 ];
 
 const roles: { role: UserRole; icon: typeof User; title: string; desc: string }[] = [
-  { role: "TENANT", icon: User, title: "I'm a Renter", desc: "Manage my lease & payments" },
-  { role: "OWNER", icon: Building2, title: "I'm an Owner", desc: "Manage my properties" },
+  { role: "TENANT", icon: User,      title: "I'm a Renter", desc: "Manage my lease & payments" },
+  { role: "OWNER",  icon: Building2, title: "I'm an Owner",  desc: "Manage my properties" },
 ];
 
-export default function AuthPage() {
-  const { signIn, signUp, currentUser, userProfile, loading } = useAuth();
+/* ── Inner component (needs useSearchParams) ───────────────────────────── */
+
+function AuthPageInner() {
+  const searchParams = useSearchParams();
+  const defaultMode = (searchParams.get("mode") ?? "signin") as "signin" | "signup";
+  const defaultRole = (searchParams.get("role") ?? "TENANT") as UserRole;
+
+  const { signUp, currentUser, userProfile, loading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
+  const [tab, setTab] = useState<"signin" | "signup">(defaultMode);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Sign-in fields
   const [signInEmail, setSignInEmail] = useState("");
   const [signInPassword, setSignInPassword] = useState("");
+
+  // Sign-up fields
   const [signUpEmail, setSignUpEmail] = useState("");
   const [signUpPassword, setSignUpPassword] = useState("");
-  const [signUpRole, setSignUpRole] = useState<UserRole>("TENANT");
+  const [signUpRole, setSignUpRole] = useState<UserRole>(defaultRole);
 
+  // Re-sync tab if URL params change (e.g. user navigates to /auth?mode=signup)
   useEffect(() => {
-    if (!loading && currentUser && userProfile) {
-      router.replace(userProfile.role === "OWNER" ? "/owner/dashboard" : "/tenant/home");
+    setTab(defaultMode);
+    setSignUpRole(defaultRole);
+  }, [defaultMode, defaultRole]);
+
+  // Redirect already-signed-in users
+  useEffect(() => {
+    if (loading || !currentUser || !userProfile) return;
+    void routeByProfile(currentUser.uid);
+  }, [loading, currentUser, userProfile]); // eslint-disable-line
+
+  async function routeByProfile(uid: string) {
+    const profile = await getUserDoc(uid);
+    if (!profile) return;
+    if (profile.role === "OWNER") {
+      router.replace(profile.activePropertyId ? "/owner/dashboard" : "/owner/onboarding/property");
+    } else {
+      if (!profile.activePropertyId) {
+        router.replace("/tenant/join");
+      } else {
+        const rec = await getTenantRecord(profile.activePropertyId as string, uid);
+        router.replace(rec?.status === "ACTIVE" ? "/tenant/home" : "/tenant/pending");
+      }
     }
-  }, [loading, currentUser, userProfile, router]);
+  }
 
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      await signIn(signInEmail, signInPassword);
+      const { user } = await signInAccount(signInEmail, signInPassword);
       toast({ title: "Welcome back!" });
+      await routeByProfile(user.uid);
     } catch (err: unknown) {
       toast({
         title: "Sign in failed",
@@ -64,13 +107,22 @@ export default function AuthPage() {
   async function handleSignUp(e: React.FormEvent) {
     e.preventDefault();
     if (signUpPassword.length < 6) {
-      toast({ title: "Password too short", description: "At least 6 characters required.", variant: "destructive" });
+      toast({
+        title: "Password too short",
+        description: "At least 6 characters required.",
+        variant: "destructive",
+      });
       return;
     }
     setIsSubmitting(true);
     try {
       await signUp(signUpEmail, signUpPassword, signUpRole);
       toast({ title: "Account created!", description: "Setting up your workspace…" });
+      if (signUpRole === "OWNER") {
+        router.replace("/owner/onboarding/property");
+      } else {
+        router.replace("/tenant/join");
+      }
     } catch (err: unknown) {
       toast({
         title: "Sign up failed",
@@ -84,9 +136,8 @@ export default function AuthPage() {
 
   return (
     <div className="flex min-h-screen">
-      {/* ── Brand panel (desktop only) ─────────────────────────────────── */}
+      {/* ── Brand panel (desktop only) ── */}
       <div className="relative hidden lg:flex lg:w-[420px] xl:w-[460px] flex-col justify-between overflow-hidden bg-primary p-10">
-        {/* Background texture */}
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0"
@@ -96,7 +147,6 @@ export default function AuthPage() {
           }}
         />
 
-        {/* Logo */}
         <div className="relative flex items-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white/20 text-xl font-bold text-white">
             C
@@ -104,7 +154,6 @@ export default function AuthPage() {
           <span className="text-xl font-semibold text-white">Cozy</span>
         </div>
 
-        {/* Copy */}
         <div className="relative">
           <h2 className="mb-3 text-3xl font-extrabold leading-tight text-white">
             Property management for real life
@@ -112,7 +161,6 @@ export default function AuthPage() {
           <p className="mb-8 text-base leading-relaxed text-white/65">
             Track rent, handle maintenance, and stay on top of your lease — all from your phone.
           </p>
-
           <ul className="flex flex-col gap-3">
             {brandFeatures.map((f) => (
               <li key={f} className="flex items-center gap-3 text-sm text-white/75">
@@ -128,16 +176,17 @@ export default function AuthPage() {
         <p className="relative text-xs text-white/35">© {new Date().getFullYear()} Cozy</p>
       </div>
 
-      {/* ── Form panel ────────────────────────────────────────────────── */}
+      {/* ── Form panel ── */}
       <div className="relative flex flex-1 flex-col items-center justify-center overflow-y-auto bg-background px-5 py-12 sm:px-10">
         {/* Back button */}
         <Link
-          href="/"
+          href="/home"
           className="absolute left-5 top-5 sm:left-8 sm:top-6 flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
           Back
         </Link>
+
         {/* Mobile logo */}
         <div className="mb-8 flex flex-col items-center gap-2 lg:hidden">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-xl font-bold text-white shadow-md">
@@ -153,13 +202,42 @@ export default function AuthPage() {
           className="w-full max-w-[400px]"
         >
           <div className="mb-7">
-            <h1 className="text-2xl font-bold">Get started</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Sign in or create your account below.
-            </p>
+            {defaultMode === "signup" && defaultRole === "OWNER" ? (
+              <>
+                <div className="mb-3 flex items-center gap-2 text-xs font-medium text-primary">
+                  <Building2 className="h-3.5 w-3.5" />
+                  Step 1 of 2 — Create your account
+                </div>
+                <h1 className="text-2xl font-bold">Register a Property</h1>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Create your owner account, then we&apos;ll walk you through property setup.
+                </p>
+              </>
+            ) : defaultMode === "signin" && defaultRole === "OWNER" ? (
+              <>
+                <h1 className="text-2xl font-bold">Owner sign in</h1>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Sign in to manage your properties and tenants.
+                </p>
+              </>
+            ) : defaultMode === "signin" && defaultRole === "TENANT" ? (
+              <>
+                <h1 className="text-2xl font-bold">Tenant sign in</h1>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Sign in to view your lease, payments, and maintenance.
+                </p>
+              </>
+            ) : (
+              <>
+                <h1 className="text-2xl font-bold">Get started</h1>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Sign in or create your account below.
+                </p>
+              </>
+            )}
           </div>
 
-          <Tabs defaultValue="signin">
+          <Tabs value={tab} onValueChange={(v) => setTab(v as "signin" | "signup")}>
             <TabsList className="mb-7 w-full rounded-xl bg-muted">
               <TabsTrigger value="signin" className="flex-1 rounded-lg text-sm">
                 Sign in
@@ -192,7 +270,11 @@ export default function AuthPage() {
                     autoComplete="current-password"
                   />
                 </Field>
-                <Button type="submit" className="mt-1 h-11 w-full rounded-xl text-[15px]" disabled={isSubmitting}>
+                <Button
+                  type="submit"
+                  className="mt-1 h-11 w-full rounded-xl text-[15px]"
+                  disabled={isSubmitting}
+                >
                   {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign in"}
                 </Button>
               </form>
@@ -241,7 +323,9 @@ export default function AuthPage() {
                         <div
                           className={cn(
                             "flex h-9 w-9 items-center justify-center rounded-xl transition-colors",
-                            signUpRole === role ? "bg-primary/12 text-primary" : "bg-muted text-muted-foreground"
+                            signUpRole === role
+                              ? "bg-primary/12 text-primary"
+                              : "bg-muted text-muted-foreground"
                           )}
                         >
                           <Icon className="h-4 w-4" />
@@ -262,8 +346,18 @@ export default function AuthPage() {
                   </div>
                 </div>
 
-                <Button type="submit" className="mt-1 h-11 w-full rounded-xl text-[15px]" disabled={isSubmitting}>
-                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create account"}
+                <Button
+                  type="submit"
+                  className="mt-1 h-11 w-full rounded-xl text-[15px]"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : signUpRole === "OWNER" ? (
+                    "Create account & set up property →"
+                  ) : (
+                    "Create account"
+                  )}
                 </Button>
               </form>
             </TabsContent>
@@ -278,7 +372,17 @@ export default function AuthPage() {
   );
 }
 
-/* ── Small helper components ─────────────────────────────────────────────── */
+/* ── Page export wrapped in Suspense (required for useSearchParams) ─────── */
+
+export default function AuthPage() {
+  return (
+    <Suspense>
+      <AuthPageInner />
+    </Suspense>
+  );
+}
+
+/* ── Helper components ───────────────────────────────────────────────────── */
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { getTenantRecord } from "@/lib/db";
 import {
   Home,
   Calendar,
@@ -56,7 +59,19 @@ const item = {
 /* ── Page ─────────────────────────────────────────────────────────────── */
 
 export default function TenantHome() {
-  const { userProfile, loading } = useRequireAuth("TENANT");
+  const { userProfile, currentUser, loading } = useRequireAuth("TENANT");
+  const router = useRouter();
+
+  useEffect(() => {
+    if (loading || !userProfile || !currentUser) return;
+    if (!userProfile.activePropertyId) {
+      router.replace("/tenant/join");
+      return;
+    }
+    getTenantRecord(userProfile.activePropertyId, currentUser.uid).then((rec) => {
+      if (!rec || rec.status === "PENDING_APPROVAL") router.replace("/tenant/pending");
+    });
+  }, [loading, userProfile, currentUser, router]);
 
   if (loading) return <LoadingState />;
 

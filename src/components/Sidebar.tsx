@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { Home, LayoutDashboard, LogOut, Settings, Building2 } from "lucide-react";
+import { Home, LayoutDashboard, LogOut, Settings, Building2, UserCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import type { NavItem } from "@/types";
 const ownerNavItems: NavItem[] = [
   { label: "Dashboard",   href: "/owner/dashboard",  icon: LayoutDashboard },
   { label: "Properties",  href: "/owner/properties", icon: Building2 },
+  { label: "Approvals",   href: "/owner/approvals",  icon: UserCheck },
   { label: "Settings",    href: "/owner/settings",   icon: Settings },
 ];
 

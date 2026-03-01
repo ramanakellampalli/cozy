@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Building2,
@@ -102,8 +105,15 @@ const item = {
 
 export default function OwnerDashboard() {
   const { userProfile, loading } = useRequireAuth("OWNER");
+  const router = useRouter();
 
-  if (loading) return <LoadingState />;
+  useEffect(() => {
+    if (!loading && userProfile && !userProfile.activePropertyId) {
+      router.replace("/owner/onboarding/property");
+    }
+  }, [loading, userProfile, router]);
+
+  if (loading || (userProfile && !userProfile.activePropertyId)) return <LoadingState />;
 
   const name = userProfile?.email?.split("@")[0] ?? "Owner";
   const hour = new Date().getHours();
@@ -119,9 +129,11 @@ export default function OwnerDashboard() {
             Here&apos;s what&apos;s happening across your properties.
           </p>
         </div>
-        <Button size="sm" className="shrink-0 gap-1.5 rounded-xl shadow-sm">
-          <Plus className="h-4 w-4" />
-          Add property
+        <Button size="sm" className="shrink-0 gap-1.5 rounded-xl shadow-sm" asChild>
+          <Link href="/owner/onboarding/property">
+            <Plus className="h-4 w-4" />
+            Add property
+          </Link>
         </Button>
       </motion.div>
 

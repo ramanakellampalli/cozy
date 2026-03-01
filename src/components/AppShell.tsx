@@ -6,7 +6,15 @@ import { Sidebar } from "@/components/Sidebar";
 import { BottomNav } from "@/components/BottomNav";
 import { useAuth } from "@/components/providers/AuthProvider";
 
-const PUBLIC_PATHS = ["/", "/auth", "/home"];
+// These paths render without nav/sidebar (full-page layouts)
+const PUBLIC_PATHS = [
+  "/",
+  "/home",
+  "/auth",
+  "/owner/onboarding/property",
+  "/tenant/join",
+  "/tenant/pending",
+];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
