@@ -6,47 +6,49 @@ import { Sidebar } from "@/components/Sidebar";
 import { BottomNav } from "@/components/BottomNav";
 import { useAuth } from "@/components/providers/AuthProvider";
 
-// Pages that don't need the app shell nav
-const PUBLIC_PATHS = ["/", "/auth"];
+const PUBLIC_PATHS = ["/", "/auth", "/home"];
 
-interface AppShellProps {
-  children: React.ReactNode;
-}
-
-export function AppShell({ children }: AppShellProps) {
+export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { currentUser } = useAuth();
+  const { currentUser, userProfile } = useAuth();
 
   const isPublicPath = PUBLIC_PATHS.includes(pathname);
   const showNav = currentUser && !isPublicPath;
 
-  if (!showNav) {
-    return <>{children}</>;
-  }
+  if (!showNav) return <>{children}</>;
+
+  const initial = userProfile?.email?.[0]?.toUpperCase() ?? "U";
 
   return (
     <div className="flex min-h-screen">
       {/* Desktop sidebar */}
       <Sidebar />
 
-      {/* Main content */}
-      <main className="flex flex-1 flex-col overflow-hidden">
-        {/* Top bar — mobile only */}
-        <header className="flex h-14 items-center border-b bg-card px-4 md:hidden">
+      {/* Content area */}
+      <main className="flex min-w-0 flex-1 flex-col">
+        {/* Mobile top bar */}
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border/60 bg-background/95 px-4 backdrop-blur-sm md:hidden">
           <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-xs">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-primary text-xs font-bold text-white shadow-sm">
               C
             </div>
-            <span className="text-lg font-bold">Cozy</span>
+            <span className="text-[17px] font-semibold">Cozy</span>
           </div>
+
+          {userProfile && (
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary">
+              {initial}
+            </div>
+          )}
         </header>
 
+        {/* Page content */}
         <motion.div
           key={pathname}
-          initial={{ opacity: 0, y: 6 }}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
-          className="flex-1 overflow-y-auto p-4 pb-20 md:p-6 md:pb-6"
+          transition={{ duration: 0.22, ease: "easeOut" }}
+          className="flex-1 overflow-y-auto p-5 pb-24 md:p-8 md:pb-8"
         >
           {children}
         </motion.div>
