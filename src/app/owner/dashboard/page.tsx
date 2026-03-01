@@ -120,7 +120,7 @@ export default function OwnerDashboard() {
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   return (
-    <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 max-w-5xl">
+    <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 w-full">
       {/* Header */}
       <motion.div variants={item} className="flex items-start justify-between">
         <div>

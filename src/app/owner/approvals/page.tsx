@@ -74,7 +74,7 @@ export default function OwnerApprovals() {
   if (loading) return <LoadingState />;
 
   return (
-    <motion.div variants={container} initial="hidden" animate="show" className="max-w-2xl space-y-6">
+    <motion.div variants={container} initial="hidden" animate="show" className="w-full space-y-6">
       {/* Header */}
       <motion.div variants={item}>
         <h1 className="text-2xl font-bold">Approvals</h1>
