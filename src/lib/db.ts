@@ -132,17 +132,40 @@ export async function validateInvite(code: string) {
 
 /* ── Tenants ──────────────────────────────────────────────────────────── */
 
+export interface TenantProfile {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  aadhar?: string;
+}
+
+export async function updateUserProfile(uid: string, profile: TenantProfile) {
+  const data: Record<string, unknown> = {
+    firstName: profile.firstName,
+    lastName: profile.lastName,
+    phone: profile.phone,
+    updatedAt: serverTimestamp(),
+  };
+  if (profile.aadhar) data.aadhar = profile.aadhar;
+  await updateDoc(doc(db, "users", uid), data);
+}
+
 export async function joinProperty(
   uid: string,
   email: string,
   propertyId: string,
-  requireApproval: boolean
+  requireApproval: boolean,
+  profile: TenantProfile
 ): Promise<TenantStatus> {
   const status: TenantStatus = requireApproval ? "PENDING_APPROVAL" : "ACTIVE";
-  await setDoc(doc(db, "properties", propertyId, "tenants", uid), {
+  const name = `${profile.firstName} ${profile.lastName}`.trim();
+  const data: Record<string, unknown> = {
     uid,
-    name: email.split("@")[0],
+    name,
+    firstName: profile.firstName,
+    lastName: profile.lastName,
     email,
+    phone: profile.phone,
     status,
     bedId: null,
     rentMonthly: null,
@@ -150,7 +173,9 @@ export async function joinProperty(
     moveInDate: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  });
+  };
+  if (profile.aadhar) data.aadhar = profile.aadhar;
+  await setDoc(doc(db, "properties", propertyId, "tenants", uid), data);
   return status;
 }
 
@@ -161,13 +186,33 @@ export async function getTenantRecord(propertyId: string, tenantUid: string) {
   return snap.exists() ? (snap.data() as { status: TenantStatus; email: string; name: string }) : null;
 }
 
+export async function countTenants(propertyId: string, status: TenantStatus): Promise<number> {
+  const q = query(
+    collection(db, "properties", propertyId, "tenants"),
+    where("status", "==", status)
+  );
+  const snap = await getDocs(q);
+  return snap.size;
+}
+
 export async function listPendingTenants(propertyId: string) {
   const q = query(
     collection(db, "properties", propertyId, "tenants"),
     where("status", "==", "PENDING_APPROVAL")
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as { uid: string; email: string; name: string; createdAt: unknown });
+  return snap.docs.map((d) =>
+    d.data() as {
+      uid: string;
+      name: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone: string;
+      aadhar?: string;
+      createdAt: unknown;
+    }
+  );
 }
 
 export async function approveTenant(propertyId: string, tenantUid: string) {

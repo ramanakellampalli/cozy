@@ -7,6 +7,10 @@ export interface UserProfile {
   uid: string;
   email: string;
   role: UserRole;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  aadhar?: string;
   activePropertyId: string | null;
   propertyIds: string[];
   createdAt: unknown;
@@ -44,7 +48,11 @@ export interface Invite {
 export interface TenantRecord {
   uid: string;
   name: string;
+  firstName: string;
+  lastName: string;
   email: string;
+  phone: string;
+  aadhar?: string;
   status: TenantStatus;
   bedId: string | null;
   rentMonthly: number | null;

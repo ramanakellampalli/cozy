@@ -1,94 +1,31 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Building2,
-  DollarSign,
   Users,
-  Wrench,
+  Clock,
   Plus,
-  TrendingUp,
-  FileText,
   ArrowUpRight,
+  MapPin,
+  BedDouble,
+  UserCheck,
 } from "lucide-react";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
+  CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useRequireAuth } from "@/hooks/useRequireAuth";
-
-/* ── Data ─────────────────────────────────────────────────────────────── */
-
-const stats = [
-  {
-    label: "Properties",
-    value: "4",
-    change: "+1 this month",
-    icon: Building2,
-    iconBg: "bg-blue-50",
-    iconColor: "text-blue-500",
-    up: true,
-  },
-  {
-    label: "Tenants",
-    value: "11",
-    change: "+2 this month",
-    icon: Users,
-    iconBg: "bg-violet-50",
-    iconColor: "text-violet-500",
-    up: true,
-  },
-  {
-    label: "Monthly Revenue",
-    value: "$8,400",
-    change: "+5.2%",
-    icon: DollarSign,
-    iconBg: "bg-emerald-50",
-    iconColor: "text-emerald-500",
-    up: true,
-  },
-  {
-    label: "Open Requests",
-    value: "3",
-    change: "2 urgent",
-    icon: Wrench,
-    iconBg: "bg-amber-50",
-    iconColor: "text-amber-500",
-    up: false,
-  },
-];
-
-const activityConfig: Record<string, { icon: typeof DollarSign; bg: string; color: string }> = {
-  payment:     { icon: DollarSign, bg: "bg-emerald-100", color: "text-emerald-600" },
-  maintenance: { icon: Wrench,     bg: "bg-orange-100",  color: "text-orange-600" },
-  lease:       { icon: FileText,   bg: "bg-blue-100",    color: "text-blue-600" },
-};
-
-const recentActivity = [
-  { id: 1, type: "payment",     title: "Rent received",      desc: "Unit 2B — $1,200",        time: "2h ago",  badge: "Paid",    badgeVariant: "success" as const },
-  { id: 2, type: "maintenance", title: "Maintenance request", desc: "Unit 4A — Leaking faucet", time: "5h ago",  badge: "Urgent",  badgeVariant: "destructive" as const },
-  { id: 3, type: "lease",       title: "Lease renewal",      desc: "Unit 1C — Jane Smith",     time: "1d ago",  badge: "Pending", badgeVariant: "secondary" as const },
-  { id: 4, type: "payment",     title: "Rent received",      desc: "Unit 3B — $1,050",        time: "1d ago",  badge: "Paid",    badgeVariant: "success" as const },
-];
-
-const revenueData = [
-  { month: "Aug", amount: 6800 },
-  { month: "Sep", amount: 7200 },
-  { month: "Oct", amount: 6500 },
-  { month: "Nov", amount: 7800 },
-  { month: "Dec", amount: 8100 },
-  { month: "Jan", amount: 7600 },
-  { month: "Feb", amount: 8400 },
-];
-const maxRevenue = Math.max(...revenueData.map((d) => d.amount));
+import { getProperty, countTenants } from "@/lib/db";
+import type { Property } from "@/types";
 
 /* ── Animation ────────────────────────────────────────────────────────── */
 
@@ -101,26 +38,57 @@ const item = {
   show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } },
 };
 
+const PROPERTY_TYPE_LABELS: Record<string, string> = {
+  HOSTEL: "Hostel",
+  PG: "PG",
+  COLIVING: "Co-living",
+};
+
 /* ── Page ─────────────────────────────────────────────────────────────── */
 
 export default function OwnerDashboard() {
-  const { userProfile, loading } = useRequireAuth("OWNER");
+  const { userProfile, loading: authLoading } = useRequireAuth("OWNER");
   const router = useRouter();
 
+  const [property, setProperty] = useState<Property | null>(null);
+  const [activeTenants, setActiveTenants] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [dataLoading, setDataLoading] = useState(true);
+
   useEffect(() => {
-    if (!loading && userProfile && !userProfile.activePropertyId) {
+    if (!authLoading && userProfile && !userProfile.activePropertyId) {
       router.replace("/owner/onboarding/property");
     }
-  }, [loading, userProfile, router]);
+  }, [authLoading, userProfile, router]);
+
+  useEffect(() => {
+    if (authLoading || !userProfile?.activePropertyId) return;
+    const pid = userProfile.activePropertyId;
+    setDataLoading(true);
+    Promise.all([
+      getProperty(pid),
+      countTenants(pid, "ACTIVE"),
+      countTenants(pid, "PENDING_APPROVAL"),
+    ])
+      .then(([prop, active, pending]) => {
+        setProperty(prop as Property | null);
+        setActiveTenants(active);
+        setPendingCount(pending);
+      })
+      .finally(() => setDataLoading(false));
+  }, [authLoading, userProfile]);
+
+  const loading = authLoading || dataLoading;
 
   if (loading || (userProfile && !userProfile.activePropertyId)) return <LoadingState />;
 
   const name = userProfile?.email?.split("@")[0] ?? "Owner";
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const propertiesCount = userProfile?.propertyIds?.length ?? 1;
 
   return (
-    <motion.div variants={container} initial="hidden" animate="show" className="space-y-6 w-full">
+    <motion.div variants={container} initial="hidden" animate="show" className="w-full space-y-6">
       {/* Header */}
       <motion.div variants={item} className="flex items-start justify-between">
         <div>
@@ -138,99 +106,143 @@ export default function OwnerDashboard() {
       </motion.div>
 
       {/* Stats */}
-      <motion.div variants={item} className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={stat.label} className="transition-all duration-200 hover:shadow-card-hover">
-              <CardContent className="p-5">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="text-xs font-medium text-muted-foreground">{stat.label}</p>
-                  <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${stat.iconBg}`}>
-                    <Icon className={`h-4 w-4 ${stat.iconColor}`} />
-                  </div>
-                </div>
-                <p className="text-2xl font-bold tracking-tight">{stat.value}</p>
-                <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                  {stat.up && <TrendingUp className="h-3 w-3 text-emerald-500" />}
-                  {stat.change}
-                </p>
-              </CardContent>
-            </Card>
-          );
-        })}
+      <motion.div variants={item} className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {/* Properties */}
+        <Card className="transition-all duration-200 hover:shadow-card-hover">
+          <CardContent className="p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground">Properties</p>
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50">
+                <Building2 className="h-4 w-4 text-blue-500" />
+              </div>
+            </div>
+            <p className="text-2xl font-bold tracking-tight">{propertiesCount}</p>
+          </CardContent>
+        </Card>
+
+        {/* Active Tenants */}
+        <Card className="transition-all duration-200 hover:shadow-card-hover">
+          <CardContent className="p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground">Active Tenants</p>
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-violet-50">
+                <Users className="h-4 w-4 text-violet-500" />
+              </div>
+            </div>
+            <p className="text-2xl font-bold tracking-tight">{activeTenants}</p>
+          </CardContent>
+        </Card>
+
+        {/* Pending Approvals */}
+        <Card
+          className={`transition-all duration-200 hover:shadow-card-hover ${
+            pendingCount > 0 ? "border-amber-200" : ""
+          }`}
+        >
+          <CardContent className="p-5">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground">Pending Approvals</p>
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-xl ${
+                  pendingCount > 0 ? "bg-amber-50" : "bg-muted"
+                }`}
+              >
+                <Clock
+                  className={`h-4 w-4 ${
+                    pendingCount > 0 ? "text-amber-500" : "text-muted-foreground"
+                  }`}
+                />
+              </div>
+            </div>
+            <p className="text-2xl font-bold tracking-tight">{pendingCount}</p>
+            {pendingCount > 0 && (
+              <Link
+                href="/owner/approvals"
+                className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-600 hover:underline"
+              >
+                Review now <ArrowUpRight className="h-3 w-3" />
+              </Link>
+            )}
+          </CardContent>
+        </Card>
       </motion.div>
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
-        {/* Revenue chart */}
+      {/* Property details + Quick actions */}
+      <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
+        {/* Active property */}
         <motion.div variants={item}>
-          <Card className="h-full">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
+          <Card className="h-full border-border/60">
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between">
                 <div>
-                  <CardTitle>Revenue</CardTitle>
-                  <CardDescription>Monthly rental income</CardDescription>
+                  <CardTitle className="text-base">{property?.name ?? "—"}</CardTitle>
+                  <CardDescription>Active property</CardDescription>
                 </div>
-                <span className="text-2xl font-bold text-primary">$8,400</span>
+                {property?.type && (
+                  <Badge variant="secondary" className="text-xs">
+                    {PROPERTY_TYPE_LABELS[property.type] ?? property.type}
+                  </Badge>
+                )}
               </div>
             </CardHeader>
-            <CardContent className="pt-4">
-              <div className="flex h-36 items-end gap-2">
-                {revenueData.map((d, i) => {
-                  const isLast = i === revenueData.length - 1;
-                  return (
-                    <div key={d.month} className="group flex flex-1 flex-col items-center gap-1.5">
-                      <div
-                        className={`w-full rounded-t-md transition-all ${
-                          isLast ? "bg-primary" : "bg-primary/20 group-hover:bg-primary/35"
-                        }`}
-                        style={{ height: `${(d.amount / maxRevenue) * 100}%` }}
-                      />
-                      <span className="text-[10px] text-muted-foreground">{d.month}</span>
-                    </div>
-                  );
-                })}
+            <CardContent className="flex flex-col gap-3">
+              {property?.city && (
+                <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    {property.city}
+                    {property.address ? ` — ${property.address}` : ""}
+                  </span>
+                </div>
+              )}
+              {(property?.totalRooms || property?.bedsPerRoom) && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <BedDouble className="h-4 w-4 shrink-0" />
+                  <span>
+                    {property.totalRooms ? `${property.totalRooms} rooms` : ""}
+                    {property.totalRooms && property.bedsPerRoom ? " · " : ""}
+                    {property.bedsPerRoom ? `${property.bedsPerRoom} beds/room` : ""}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <UserCheck className="h-4 w-4 shrink-0" />
+                <span>
+                  {property?.requireApproval
+                    ? "Approval required for new tenants"
+                    : "Tenants join without approval"}
+                </span>
               </div>
             </CardContent>
           </Card>
         </motion.div>
 
-        {/* Recent activity */}
+        {/* Quick actions */}
         <motion.div variants={item}>
-          <Card className="h-full">
-            <CardHeader className="flex-row items-center justify-between pb-2">
-              <div>
-                <CardTitle>Activity</CardTitle>
-                <CardDescription>Latest updates</CardDescription>
-              </div>
-              <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs text-muted-foreground">
-                View all <ArrowUpRight className="h-3 w-3" />
-              </Button>
+          <Card className="h-full border-border/60">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Quick actions</CardTitle>
             </CardHeader>
-            <CardContent className="divide-y divide-border/60 p-0">
-              {recentActivity.map((a) => {
-                const cfg = activityConfig[a.type];
-                const Icon = cfg.icon;
-                return (
-                  <div key={a.id} className="flex items-center gap-3 px-6 py-3.5">
-                    <div
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${cfg.bg}`}
-                    >
-                      <Icon className={`h-3.5 w-3.5 ${cfg.color}`} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{a.title}</p>
-                      <p className="truncate text-xs text-muted-foreground">{a.desc}</p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <Badge variant={a.badgeVariant} className="text-[10px]">
-                        {a.badge}
-                      </Badge>
-                      <span className="text-[10px] text-muted-foreground">{a.time}</span>
-                    </div>
-                  </div>
-                );
-              })}
+            <CardContent className="flex flex-col gap-2">
+              {pendingCount > 0 && (
+                <Button
+                  variant="outline"
+                  className="justify-start gap-2 rounded-xl border-amber-200 text-amber-700 hover:bg-amber-50"
+                  asChild
+                >
+                  <Link href="/owner/approvals">
+                    <Clock className="h-4 w-4" />
+                    Review {pendingCount} pending{" "}
+                    {pendingCount === 1 ? "request" : "requests"}
+                  </Link>
+                </Button>
+              )}
+              <Button variant="outline" className="justify-start gap-2 rounded-xl" asChild>
+                <Link href="/owner/onboarding/property">
+                  <Plus className="h-4 w-4" />
+                  Add another property
+                </Link>
+              </Button>
             </CardContent>
           </Card>
         </motion.div>
