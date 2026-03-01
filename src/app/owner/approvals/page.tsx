@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { UserCheck, UserX, Users, CheckCircle2, Loader2 } from "lucide-react";
+import { UserCheck, UserX, Users, CheckCircle2, Loader2, Phone, CreditCard } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,8 +12,12 @@ import { listPendingTenants, approveTenant, rejectTenant } from "@/lib/db";
 
 interface PendingTenant {
   uid: string;
-  email: string;
   name: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  aadhar?: string;
   createdAt: unknown;
 }
 
@@ -25,6 +29,12 @@ const item = {
   hidden: { opacity: 0, y: 16 },
   show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] } },
 };
+
+function maskedAadhar(aadhar: string) {
+  const digits = aadhar.replace(/\D/g, "");
+  if (digits.length < 4) return aadhar;
+  return `XXXX XXXX ${digits.slice(-4)}`;
+}
 
 export default function OwnerApprovals() {
   const { userProfile, loading: authLoading } = useRequireAuth("OWNER");
@@ -70,7 +80,6 @@ export default function OwnerApprovals() {
   }
 
   const loading = authLoading || listLoading;
-
   if (loading) return <LoadingState />;
 
   return (
@@ -83,16 +92,14 @@ export default function OwnerApprovals() {
         </p>
       </motion.div>
 
-      {/* Count badge */}
-      <motion.div variants={item}>
-        {tenants.length > 0 ? (
+      {tenants.length > 0 && (
+        <motion.div variants={item}>
           <Badge className="rounded-full border-0 bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
             {tenants.length} pending {tenants.length === 1 ? "request" : "requests"}
           </Badge>
-        ) : null}
-      </motion.div>
+        </motion.div>
+      )}
 
-      {/* List */}
       {tenants.length === 0 ? (
         <motion.div variants={item}>
           <Card className="border-border/60 shadow-card">
@@ -118,22 +125,41 @@ export default function OwnerApprovals() {
             <CardContent className="divide-y divide-border/60 p-0">
               {tenants.map((tenant) => {
                 const isActing = actionUid === tenant.uid;
-                const initial = tenant.email?.[0]?.toUpperCase() ?? "T";
+                const initials =
+                  `${tenant.firstName?.[0] ?? ""}${tenant.lastName?.[0] ?? ""}`.toUpperCase() ||
+                  tenant.email[0].toUpperCase();
                 return (
-                  <div key={tenant.uid} className="flex items-center gap-4 px-6 py-4">
+                  <div key={tenant.uid} className="flex items-start gap-4 px-6 py-5">
                     {/* Avatar */}
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                      {initial}
+                      {initials}
                     </div>
 
                     {/* Info */}
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{tenant.name || tenant.email}</p>
-                      <p className="truncate text-xs text-muted-foreground">{tenant.email}</p>
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <p className="text-sm font-semibold leading-none">
+                        {tenant.name || tenant.email}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{tenant.email}</p>
+
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 pt-0.5">
+                        {tenant.phone && (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Phone className="h-3 w-3" />
+                            {tenant.phone}
+                          </span>
+                        )}
+                        {tenant.aadhar && (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <CreditCard className="h-3 w-3" />
+                            {maskedAadhar(tenant.aadhar)}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Actions */}
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-2 pt-0.5">
                       {isActing ? (
                         <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                       ) : (
